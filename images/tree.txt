@@ -1,0 +1,46 @@
+Folder PATH listing
+Volume serial number is 70F0-9F83
+C:.
+|   tree.txt
+|   
++---board
+|   \---tiles
+|       \---set1
+|               dark_tile.png
+|               light_tile.png
+|               
++---pieces
+|   +---allpieces
+|   |       ChessPiecesArray.png
+|   |       Chess_bdt60.png
+|   |       Chess_blt60.png
+|   |       Chess_kdt60.png
+|   |       Chess_klt60.png
+|   |       Chess_ndt60.png
+|   |       Chess_nlt60.png
+|   |       Chess_pdt60.png
+|   |       Chess_plt60.png
+|   |       Chess_qdt60.png
+|   |       Chess_qlt60.png
+|   |       Chess_rdt60.png
+|   |       Chess_rlt60.png
+|   |       
+|   +---black
+|   |       Chess_bdt60.png
+|   |       Chess_kdt60.png
+|   |       Chess_ndt60.png
+|   |       Chess_pdt60.png
+|   |       Chess_qdt60.png
+|   |       Chess_rdt60.png
+|   |       
+|   \---white
+|           Chess_blt60.png
+|           Chess_klt60.png
+|           Chess_nlt60.png
+|           Chess_plt60.png
+|           Chess_qlt60.png
+|           Chess_rlt60.png
+|           
+\---placeholder
+        purple_placeholder.png
+        
