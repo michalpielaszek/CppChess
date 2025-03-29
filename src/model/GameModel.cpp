@@ -10,32 +10,33 @@
 #include "Queen.h"
 #include "Pawn.h"
 #include "Knight.h"
+#include <iostream>
 
 
 
 void GameModel::populate_piece_board_map() {
     int index = 0;
 
-    // Place white back row
+    // Czarny tylny rząd (u góry)
     for (int x = 0; x < 8; ++x)
-        piece_board_map_[0][x] = pieces_[index++];
+        piece_board_map_[x][7] = pieces_[index++];
 
-    // Place white pawns
+    // Czarne pionki
     for (int x = 0; x < 8; ++x)
-        piece_board_map_[1][x] = pieces_[index++];
+        piece_board_map_[x][6] = pieces_[index++];
 
-    // Empty squares
+    // Puste pola w środku
     for (int y = 2; y < 6; ++y)
         for (int x = 0; x < 8; ++x)
-            piece_board_map_[y][x] = nullptr;
+            piece_board_map_[x][y] = nullptr;
 
-    // Place black pawns
+    // Białe pionki
     for (int x = 0; x < 8; ++x)
-        piece_board_map_[6][x] = pieces_[index++];
+        piece_board_map_[x][1] = pieces_[index++];
 
-    // Place black back row
+    // Biały tylny rząd (na dole)
     for (int x = 0; x < 8; ++x)
-        piece_board_map_[7][x] = pieces_[index++];
+        piece_board_map_[x][0] = pieces_[index++];
 }
 
 void GameModel::populate_pieces() {
@@ -65,6 +66,9 @@ void GameModel::populate_pieces() {
 }
 
 std::vector<Piece*> GameModel::getPieces() {
+    for (auto piece : pieces_) {
+        std::cout<< Piece::pieceNameToString(piece->name_);
+    }
     return pieces_;
 }
 

@@ -18,11 +18,7 @@ int main(int argc, char** argv) {
     model->setController(controller);
 
     // Start wxWidgets (calls View::OnInit internally)
-    int result = View::start(argc, argv, *view);
 
-    // Initialize controller AFTER OnInit to ensure View and Board are ready
-    controller->initialize_controller();
-
-    return result;
+    return View::start(argc, argv, *view);
 }
 

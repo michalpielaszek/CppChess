@@ -6,6 +6,8 @@
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 
+const int TILE_SIZE = 60;
+
 int View::start(int argc, char** argv, View& view) {
     return wxEntry(argc, argv);
 }
@@ -15,17 +17,54 @@ wxBitmap View::ConvertToBitmap(const wxImage& image) {
 }
 
 wxBitmap View::CombineImagesToBitmap(const wxImage& tileImage, const wxImage& pieceImage) {
-    wxImage combined = tileImage.Copy();
+    wxImage tileCopy = tileImage.Copy();
+    wxImage pieceCopy = pieceImage;
 
-    if (tileImage.GetSize() != pieceImage.GetSize()) {
-        wxImage resizedPiece = pieceImage.Scale(tileImage.GetWidth(), tileImage.GetHeight(), wxIMAGE_QUALITY_HIGH);
-        combined.Paste(resizedPiece, 0, 0);
-    } else {
-        combined.Paste(pieceImage, 0, 0);
+    // Skalowanie figur (ważne!)
+    if (tileCopy.GetSize() != pieceCopy.GetSize()) {
+        pieceCopy = pieceCopy.Scale(tileCopy.GetWidth(), tileCopy.GetHeight(), wxIMAGE_QUALITY_HIGH);
     }
 
-    return wxBitmap(combined);
+    // Zapewnij kanał alfa
+    if (!tileCopy.HasAlpha()) tileCopy.InitAlpha();
+    if (!pieceCopy.HasAlpha()) pieceCopy.InitAlpha();
+
+    /*
+     *  Precisely what is going on here, since this library struggles with alpha channels.
+     *  Approach taken here is as follows, the program iterates through all pixels of tile image
+     *  as image is already resized to match tile size, and handles alpha proportions for each pixel.
+     *  Each value of RGB is being blended with alpha proportion being value in [0, 1]
+     *  0 - full transparency
+     *  1 - full visibility
+     *
+     */
+    for (int x = 0; x < tileCopy.GetWidth(); ++x) {
+        for (int y = 0; y < tileCopy.GetHeight(); ++y) {
+            const float alpha = pieceCopy.GetAlpha(x, y) / 255.f;
+
+            if (alpha > 0.f) {
+                const unsigned char tileR = tileCopy.GetRed(x, y);
+                const unsigned char tileG = tileCopy.GetGreen(x, y);
+                const unsigned char tileB = tileCopy.GetBlue(x, y);
+
+                const unsigned char pieceR = pieceCopy.GetRed(x, y);
+                const unsigned char pieceG = pieceCopy.GetGreen(x, y);
+                const unsigned char pieceB = pieceCopy.GetBlue(x, y);
+
+                // Color mix
+                const unsigned char finalR = tileR * (1 - alpha) + pieceR * alpha;
+                const unsigned char finalG = tileG * (1 - alpha) + pieceG * alpha;
+                const unsigned char finalB = tileB * (1 - alpha) + pieceB * alpha;
+
+                tileCopy.SetRGB(x, y, finalR, finalG, finalB);
+                tileCopy.SetAlpha(x, y, 255);
+            }
+        }
+    }
+
+    return wxBitmap(tileCopy);
 }
+
 
 // ===========================
 //           VIEW
@@ -41,16 +80,26 @@ bool View::OnInit() {
     settings_ = new Settings(this);
     gameWindow_ = new GameWindow(this);
 
-    board_ = new Board(gameWindow_);     // board's parent set correctly here
-    gameWindow_->board_ = board_;        // gameWindow's board_ is set here
+    board_ = new Board(gameWindow_);
+    gameWindow_->board_ = board_;
 
     menu_->initialize_frame();
     settings_->initialize_frame();
-    gameWindow_->initialize_frame();
 
-    board_->populate_maps();             // ✅ now it's safe to call this!
+    if (controller_) {
+        controller_->initialize_controller();  // ← Controller musi być już dostępny tutaj
+    } else {
+        std::cerr << "Controller not initialized in View::OnInit()\n";
+    }
+
+    board_->populate_maps();  // ← DOPIERO TUTAJ, PO CONTROLLERZE (ważne!)
+    gameWindow_->initialize_frame();  // ← GameWindow musi się utworzyć PO mapach
 
     ShowMenu();
+
+    //Handlers must be initiated after all windows and classes are ready and initialized
+    //TODO
+    //handlers for other classes
     return true;
 }
 
@@ -74,6 +123,8 @@ void View::ShowGameWindow() {
     auto pos = menu_->menuFrame_->GetPosition();
     gameWindow_->gameFrame_->SetPosition(pos);
     gameWindow_->gameFrame_->Show(true);
+    gameWindow_->initialize_handlers();
+    gameWindow_->resizeReady_ = true;
 }
 
 // ===========================
@@ -163,14 +214,18 @@ void View::Settings::OnLeaveSettingsButtonClick(wxCommandEvent& event) {
 // ===========================
 
 void View::GameWindow::initialize_frame() {
-    gameFrame_ = new wxFrame(nullptr, wxID_ANY, "Game", wxDefaultPosition, wxSize(1200, 675));
+    gameFrame_ = new wxFrame(nullptr, wxID_ANY, "Game", wxDefaultPosition, wxSize(TILE_SIZE * 8 + 220, TILE_SIZE * 8 + 50));
     gamePanel_ = new wxPanel(gameFrame_, wxID_ANY);
     frontLayout_ = new wxBoxSizer(wxHORIZONTAL);
     gamePanel_->SetSizer(frontLayout_);
 
-    boardPanel_ = new wxPanel(gamePanel_, wxID_ANY);
-    gameGrid_ = new wxGridSizer(8, 0, 0);
+
+    // Left-side board
+    boardPanel_ = new wxPanel(gamePanel_, wxID_ANY, wxDefaultPosition, wxSize(TILE_SIZE * 8, TILE_SIZE * 8));
+
+    gameGrid_ = new wxGridSizer(8, 0, 0, 0);
     boardPanel_->SetSizer(gameGrid_);
+    boardPanel_->SetMinSize(wxSize(TILE_SIZE * 8, TILE_SIZE * 8));
 
     Board* board = parent_->board_;
     if (!board) {
@@ -183,11 +238,16 @@ void View::GameWindow::initialize_frame() {
     for (int y = 0; y < 8; ++y) {
         for (int x = 0; x < 8; ++x) {
             std::pair<int, int> pos = {x, y};
-            gameGrid_->Add(new wxStaticBitmap(boardPanel_, wxID_ANY, board->boardDisplayReadyMap_[pos]));
+            wxStaticBitmap *img = new wxStaticBitmap(boardPanel_, wxID_ANY, board->boardDisplayReadyMap_[pos], wxDefaultPosition, wxSize(TILE_SIZE, TILE_SIZE));
+            gameGrid_->Add(img, 0, wxALIGN_CENTER);
         }
     }
 
-    frontLayout_->Add(boardPanel_, 3, wxEXPAND | wxALL, 5);
+    // StretchSpacer is just an element that sets proportions how much left and right should be left as free space
+    // as the frontLayout_ aligns its children to center
+    frontLayout_->AddStretchSpacer(1);
+    frontLayout_->Add(boardPanel_, 0, wxALIGN_CENTER, 5);
+    frontLayout_->AddStretchSpacer(1);
 
     // Right-side info panel
     infoPanel_ = new wxPanel(gamePanel_, wxID_ANY);
@@ -218,9 +278,76 @@ void View::GameWindow::initialize_frame() {
 
     frontLayout_->Add(infoPanel_, 1, wxEXPAND | wxALL, 5);
 
-    backButton_->Bind(wxEVT_BUTTON, &View::GameWindow::OnLeaveGameButtonClick, this);
-
     gameFrame_->Show(false);
+}
+
+void View::GameWindow::OnResize(wxSizeEvent& event) {
+    if (resizeReady_) {
+        wxSize panelSize = gamePanel_->GetClientSize();
+
+        // Zakładamy, że frontLayout_ ma boardPanel_ i infoPanel_
+        int infoPanelWidth = infoPanel_->GetSize().GetWidth();
+
+        if (panelSize.GetWidth() <= 0 || panelSize.GetHeight() <= 0 || infoPanelWidth <= 0) {
+            std::cerr << "Zbyt wczesny resize – infoPanel/gamePanel nie gotowe\n";
+            event.Skip();
+            return;
+        }
+
+        int availableWidth = panelSize.GetWidth() - infoPanelWidth;
+        int availableHeight = panelSize.GetHeight();
+
+        int size = std::min(availableWidth, availableHeight);
+
+        boardPanel_->SetMinSize(wxSize(size, size));
+        boardPanel_->SetSize(wxSize(size, size));
+
+        board_->setSize(size);
+        std::cout << "Size: " << size << ", Size/8: " << size/8 <<  std::endl;
+        size_tiles_update(size / 8, size / 8);
+        refresh_board_display();
+
+        gamePanel_->Layout();
+        gamePanel_->Refresh();
+
+        //for now handling is just ignored
+    }
+    event.Skip();
+}
+
+void View::GameWindow::size_tiles_update(int x, int y) {
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            std::pair<int, int> pos = {i, j};
+            auto tile_img = board_->boardTilesImagesMap_.at(pos).Scale(x, y, wxIMAGE_QUALITY_HIGH);
+            wxBitmap bitmap;
+
+            // Jeśli jest figura na polu i ma prawidłowy obraz
+            if (board_->piecesBoardMap_.contains(pos) && board_->piecesBoardMap_.at(pos).IsOk()) {
+                auto piece_img = board_->piecesBoardMap_.at(pos).Scale(x, y, wxIMAGE_QUALITY_HIGH);
+                bitmap = View::CombineImagesToBitmap(tile_img, piece_img);
+            } else {
+                // Puste pole
+                bitmap = wxBitmap(tile_img);
+            }
+
+            board_->piece_tile_images_[pos] = bitmap;
+            board_->boardDisplayReadyMap_[pos] = bitmap;
+        }
+    }
+}
+
+void View::GameWindow::refresh_board_display() {
+    gameGrid_->Clear(true);  // usuwa stare bitmapy
+
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            std::pair<int, int> pos = {x, y};
+            wxStaticBitmap *img = new wxStaticBitmap(boardPanel_, wxID_ANY, board_->boardDisplayReadyMap_[pos]);
+            gameGrid_->Add(img, 0, wxALIGN_CENTER);
+        }
+    }
+    boardPanel_->Layout();
 }
 
 void View::GameWindow::OnLeaveGameButtonClick(wxCommandEvent& event) {
@@ -240,6 +367,10 @@ void View::Board::populate_maps() {
 
     wxImage lightTile(lightPath, wxBITMAP_TYPE_PNG);
     wxImage darkTile(darkPath, wxBITMAP_TYPE_PNG);
+
+    //Downscaling to 40x40 pixel sizes
+    lightTile = lightTile.Scale(TILE_SIZE, TILE_SIZE, wxIMAGE_QUALITY_HIGH);
+    darkTile = darkTile.Scale(TILE_SIZE, TILE_SIZE, wxIMAGE_QUALITY_HIGH);
 
     if (!lightTile.IsOk()) std::cerr << "Failed to load: " << std::string(lightPath.mb_str()) << "\n";
     if (!darkTile.IsOk())  std::cerr << "Failed to load: " << std::string(darkPath.mb_str()) << "\n";
@@ -281,6 +412,12 @@ void View::Board::populate_maps() {
         }
     }
 }
+
+void View::GameWindow::initialize_handlers() {
+    backButton_->Bind(wxEVT_BUTTON, &View::GameWindow::OnLeaveGameButtonClick, this);
+    gameFrame_->Bind(wxEVT_SIZE, &View::GameWindow::OnResize, this);
+}
+
 
 
 

@@ -117,12 +117,18 @@ public:
         Board* board_;
         View* parent_ = nullptr;
 
+        bool resizeReady_ = false;
+
         GameWindow(View *parent) : parent_(parent), board_(nullptr) {
             // initialize other members to nullptr too if needed
         }
 
         void initialize_frame();
         void OnLeaveGameButtonClick(wxCommandEvent& event);
+        void OnResize(wxSizeEvent& event);
+        void size_tiles_update(int x, int y);
+        void initialize_handlers();
+        void refresh_board_display();
     };
 
     // =======================
@@ -131,6 +137,7 @@ public:
     class Board {
     public:
         GameWindow* parent_ = nullptr;
+        int size_;
 
         std::map<std::pair<int, int>, wxImage> boardTilesImagesMap_;
         std::map<std::pair<int, int>, wxImage> piecesBoardMap_;
@@ -142,6 +149,14 @@ public:
         }
 
         void populate_maps();
+
+        int getSize() {
+            return size_;
+        }
+
+        void setSize(int size) {
+            size_ = size;
+        }
     };
 };
 

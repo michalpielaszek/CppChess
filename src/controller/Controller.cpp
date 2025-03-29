@@ -83,11 +83,9 @@
 
 
 void Controller::initialize_pieces_images() {
-    wxInitAllImageHandlers();  // 🔧 Required to avoid handler errors
-
-    // Get the directory where the executable resides
+    wxInitAllImageHandlers();
     wxString execPath = wxStandardPaths::Get().GetExecutablePath();
-    wxString baseDir = wxFileName(execPath).GetPath(); // cmake-build-debug
+    wxString baseDir = wxFileName(execPath).GetPath();
     wxString projectRoot = wxFileName(baseDir + "/..").GetAbsolutePath();
 
     wxString whitePath = projectRoot + "/images/pieces/white/";
@@ -96,7 +94,9 @@ void Controller::initialize_pieces_images() {
     auto loadImage = [](const wxString& path) {
         wxImage img(path, wxBITMAP_TYPE_PNG);
         if (!img.IsOk()) {
-            std::cout << "Failed to load image: " << std::string(path.mb_str()) << std::endl;
+            std::cout << "Nie udało się wczytać obrazu: " << path << std::endl;
+        } else {
+            std::cout << "Wczytano obraz: " << path << std::endl;
         }
         return img;
     };
@@ -118,24 +118,28 @@ void Controller::initialize_pieces_images() {
 void Controller::initialize_controller() {
     wxInitAllImageHandlers();
     model_->populate_pieces();             // must come first
+    model_->getPieces();
+    std::cout<<"Inicjalizacja powinna sie wykonac";
     model_->populate_piece_board_map();
     initialize_pieces_images();
 }
 
 void Controller::map_all_pieces_to_tiles() {
     auto boardMap = model_->getBoardMap();
-
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             Piece* piece = boardMap[i][j];
-            if (!piece) continue;
-
-            auto it = piecesPiecesMap_.find(piece->name_);
-            if (it != piecesPiecesMap_.end()) {
-                view_->gameWindow_->board_->piecesBoardMap_[{i, j}] = it->second;
+            if (piece) {
+                if (piecesPiecesMap_.contains(piece->name_)) {
+                    view_->gameWindow_->board_->piecesBoardMap_[{i, j}] = piecesPiecesMap_[piece->name_];
+                    std::cout << "Przypisano obraz do [" << i << ", " << j << "]\n";
+                } else {
+                    std::cout << "Brak obrazu dla [" << i << ", " << j << "] " << piece->name_ << "\n";
+                }
             }
         }
     }
 }
+
 
 
