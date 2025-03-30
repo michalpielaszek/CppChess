@@ -89,11 +89,12 @@ public:
     // =======================
     //       GameWindow
     // =======================
+    class BoardPanel;
     class GameWindow {
     public:
         wxFrame* gameFrame_ = nullptr;
         wxPanel* gamePanel_ = nullptr;
-        wxPanel* boardPanel_ = nullptr;
+        BoardPanel* boardPanel_ = nullptr;
         wxPanel* infoPanel_ = nullptr;
 
         wxBoxSizer* frontLayout_ = nullptr;
@@ -126,9 +127,12 @@ public:
         void initialize_frame();
         void OnLeaveGameButtonClick(wxCommandEvent& event);
         void OnResize(wxSizeEvent& event);
-        void size_tiles_update(int x, int y);
         void initialize_handlers();
+        /*
+        void size_tiles_update(int x, int y);
+
         void refresh_board_display();
+        */
     };
 
     // =======================
@@ -157,6 +161,43 @@ public:
         void setSize(int size) {
             size_ = size;
         }
+    };
+
+    // =======================
+    //        BoardPanel
+    // =======================
+
+    /*
+     * This class is for custom rendering, since current / previous approach included
+     * refactoring and applying images to the Panels on the run, during resize and was extremely slow.
+     * My suspicion is that this approach is good for statically drawing images and themes once on start,
+     * terrible for resize in short time.
+     * Now idea is to hand printing all images on the run to probably better dedicated tools and
+     * BoardPanel comes in handy since all event handling and drawing can be contained in one class
+     */
+
+    class BoardPanel : public wxPanel {
+    public:
+        Board* board_ = nullptr;
+        BoardPanel(wxPanel* parent, Board* board_) : wxPanel(parent), board_(board_) {
+            Bind(wxEVT_PAINT, &BoardPanel::OnPaint, this);
+            Bind(wxEVT_SIZE, &BoardPanel::OnResize, this);
+            SetBackgroundStyle(wxBG_STYLE_PAINT);
+        };
+        void OnPaint(wxPaintEvent& event);
+        void OnResize(wxSizeEvent& event);
+
+    private:
+        /*  Note for OnPaint
+         *  It is called each time resize, or in fact any action requiring repaint.
+         *  We need to provide custom set of instructions to handle the process ourselves
+         *  Bind must be placed in constructor so that we instantly tell wxWidgets' drawing system
+         *  that we handle printing and resizing before system assign its own methods
+         */
+        void DrawBoard(wxDC& dc);
+        void DrawPieces(wxDC& dc);
+
+        wxSize tileSize_; // dynamiczny rozmiar kafelka
     };
 };
 

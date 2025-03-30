@@ -32,11 +32,11 @@ void GameModel::populate_piece_board_map() {
 
     // Białe pionki
     for (int x = 0; x < 8; ++x)
-        piece_board_map_[x][1] = pieces_[index++];
+        piece_board_map_[x][0] = pieces_[index++];
 
     // Biały tylny rząd (na dole)
     for (int x = 0; x < 8; ++x)
-        piece_board_map_[x][0] = pieces_[index++];
+        piece_board_map_[x][1] = pieces_[index++];
 }
 
 void GameModel::populate_pieces() {

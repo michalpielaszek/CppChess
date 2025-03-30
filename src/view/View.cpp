@@ -5,6 +5,7 @@
 #include <iostream>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
+#include <wx/dcbuffer.h>
 
 const int TILE_SIZE = 60;
 
@@ -220,12 +221,7 @@ void View::GameWindow::initialize_frame() {
     gamePanel_->SetSizer(frontLayout_);
 
 
-    // Left-side board
-    boardPanel_ = new wxPanel(gamePanel_, wxID_ANY, wxDefaultPosition, wxSize(TILE_SIZE * 8, TILE_SIZE * 8));
 
-    gameGrid_ = new wxGridSizer(8, 0, 0, 0);
-    boardPanel_->SetSizer(gameGrid_);
-    boardPanel_->SetMinSize(wxSize(TILE_SIZE * 8, TILE_SIZE * 8));
 
     Board* board = parent_->board_;
     if (!board) {
@@ -235,13 +231,11 @@ void View::GameWindow::initialize_frame() {
 
     board->populate_maps();
 
-    for (int y = 0; y < 8; ++y) {
-        for (int x = 0; x < 8; ++x) {
-            std::pair<int, int> pos = {x, y};
-            wxStaticBitmap *img = new wxStaticBitmap(boardPanel_, wxID_ANY, board->boardDisplayReadyMap_[pos], wxDefaultPosition, wxSize(TILE_SIZE, TILE_SIZE));
-            gameGrid_->Add(img, 0, wxALIGN_CENTER);
-        }
-    }
+    // Left-side board
+    //boardPanel_ = new wxPanel(gamePanel_, wxID_ANY, wxDefaultPosition, wxSize(TILE_SIZE * 8, TILE_SIZE * 8));
+    boardPanel_ = new BoardPanel(gamePanel_, board);
+
+    boardPanel_->SetMinSize(wxSize(TILE_SIZE * 8, TILE_SIZE * 8));
 
     // StretchSpacer is just an element that sets proportions how much left and right should be left as free space
     // as the frontLayout_ aligns its children to center
@@ -304,8 +298,6 @@ void View::GameWindow::OnResize(wxSizeEvent& event) {
 
         board_->setSize(size);
         std::cout << "Size: " << size << ", Size/8: " << size/8 <<  std::endl;
-        size_tiles_update(size / 8, size / 8);
-        refresh_board_display();
 
         gamePanel_->Layout();
         gamePanel_->Refresh();
@@ -315,7 +307,7 @@ void View::GameWindow::OnResize(wxSizeEvent& event) {
     event.Skip();
 }
 
-void View::GameWindow::size_tiles_update(int x, int y) {
+/*void View::GameWindow::size_tiles_update(int x, int y) {
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             std::pair<int, int> pos = {i, j};
@@ -335,9 +327,9 @@ void View::GameWindow::size_tiles_update(int x, int y) {
             board_->boardDisplayReadyMap_[pos] = bitmap;
         }
     }
-}
+}*/
 
-void View::GameWindow::refresh_board_display() {
+/*void View::GameWindow::refresh_board_display() {
     gameGrid_->Clear(true);  // usuwa stare bitmapy
 
     for (int y = 0; y < 8; ++y) {
@@ -348,7 +340,7 @@ void View::GameWindow::refresh_board_display() {
         }
     }
     boardPanel_->Layout();
-}
+}*/
 
 void View::GameWindow::OnLeaveGameButtonClick(wxCommandEvent& event) {
     parent_->ShowMenu();
@@ -418,10 +410,56 @@ void View::GameWindow::initialize_handlers() {
     gameFrame_->Bind(wxEVT_SIZE, &View::GameWindow::OnResize, this);
 }
 
+// =======================
+//        BoardPanel
+// =======================
 
+void View::BoardPanel::OnResize(wxSizeEvent& event) {
+    auto size = GetClientSize();
+    tileSize_ = wxSize(size.GetWidth() / 8, size.GetHeight() / 8);
+    //Refresh is responsible for creating wxEVT_PAINT,
+    //informs system that this event has to be handled
+    //and the OnPaint comes to handle the event.
+    Refresh();
+    event.Skip();
+}
 
+void View::BoardPanel::OnPaint(wxPaintEvent& event) {
+    wxAutoBufferedPaintDC dc(this);
 
+    dc.Clear();
 
+    DrawBoard(dc);
+    DrawPieces(dc);
+}
 
+void View::BoardPanel::DrawBoard(wxDC& dc) {
+    for (int x = 0; x < 8; ++x) {
+        for (int y = 0; y < 8; ++y) {
+            std::pair<int, int> pos = {x, y};
+            //Image to draw
+            wxBitmap tile_img = board_->boardTilesImagesMap_.at(pos).Scale(tileSize_.GetWidth(), tileSize_.GetHeight(), wxIMAGE_QUALITY_HIGH);
+            dc.DrawBitmap(tile_img, pos.first * tileSize_.GetWidth(), pos.second * tileSize_.GetHeight(), true);
+        }
+    }
+}
 
-
+void View::BoardPanel::DrawPieces(wxDC& dc) {
+    for (int x = 0; x < 8; ++x) {
+        for (int y = 0; y < 8; ++y) {
+            std::pair<int, int> pos = {x, y};
+            wxBitmap img;
+            if (board_->piecesBoardMap_.contains(pos)) {
+                wxImage piece_img = board_->piecesBoardMap_.at(pos).Scale(tileSize_.GetWidth(), tileSize_.GetHeight(), wxIMAGE_QUALITY_HIGH);
+                wxImage tile_img = board_->boardTilesImagesMap_.at(pos).Scale(tileSize_.GetWidth(), tileSize_.GetHeight(), wxIMAGE_QUALITY_HIGH);
+                img = View::CombineImagesToBitmap(tile_img, piece_img);
+                dc.DrawBitmap(img, pos.first * tileSize_.GetWidth(), pos.second * tileSize_.GetHeight(), true);
+            } else {
+                //Image to draw
+                img = board_->boardTilesImagesMap_.at(pos).Scale(tileSize_.GetWidth(), tileSize_.GetHeight(), wxIMAGE_QUALITY_HIGH);
+                dc.DrawBitmap(img, pos.first * tileSize_.GetWidth(), pos.second * tileSize_.GetHeight(), true);
+                //dc.DrawBitmap(img, pos.first, pos.second, true);
+            }
+        }
+    }
+}
